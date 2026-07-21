@@ -1,0 +1,3 @@
+# Test artifacts are ignored by git.
+# This file ensures the artifacts directory remains in the repository.
+
