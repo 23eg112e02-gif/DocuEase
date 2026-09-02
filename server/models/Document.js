@@ -20,6 +20,19 @@ const collaboratorSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const versionSchema = new mongoose.Schema(
+  {
+    title: { type: String, default: 'Untitled Document' },
+    content: { type: String, default: '' },
+    savedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    label: { type: String, default: '' }
+  },
+  { timestamps: { createdAt: true, updatedAt: false } }
+);
+
 const documentSchema = new mongoose.Schema(
   {
     title: {
@@ -42,6 +55,10 @@ const documentSchema = new mongoose.Schema(
       type: [collaboratorSchema],
       default: []
     },
+    versions: {
+      type: [versionSchema],
+      default: []
+    },
     status: {
       type: String,
       enum: ['draft', 'published', 'archived'],
@@ -61,5 +78,7 @@ const documentSchema = new mongoose.Schema(
 );
 
 documentSchema.index({ 'collaborators.user': 1 });
+
+export const MAX_VERSIONS = 30;
 
 export default mongoose.model('Document', documentSchema);
