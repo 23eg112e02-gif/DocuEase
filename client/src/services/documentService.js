@@ -6,3 +6,7 @@ export const createDocument = async (payload) => unwrap(await api.post('/documen
 export const updateDocument = async (id, payload) => unwrap(await api.put(`/documents/${id}`, payload));
 export const duplicateDocument = async (id) => unwrap(await api.post(`/documents/${id}/duplicate`));
 export const deleteDocument = async (id) => unwrap(await api.delete(`/documents/${id}`));
+
+export const listCollaborators = async (id) => unwrap(await api.get(`/documents/${id}/collaborators`));
+export const shareDocument = async (id, payload) => unwrap(await api.post(`/documents/${id}/share`, payload));
+export const unshareDocument = async (id, userId) => unwrap(await api.delete(`/documents/${id}/share/${userId}`));
