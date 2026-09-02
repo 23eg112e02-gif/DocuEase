@@ -41,3 +41,12 @@ export const listUploads = asyncHandler(async (req, res) => {
   const uploads = await Upload.find({ owner: req.user._id }).sort({ createdAt: -1 });
   res.json(new ApiResponse(200, { uploads }, 'Uploads fetched'));
 });
+
+export const deleteUpload = asyncHandler(async (req, res) => {
+  const upload = await Upload.findOneAndDelete({ _id: req.params.id, owner: req.user._id });
+  if (!upload) {
+    return res.status(404).json({ success: false, message: 'Upload not found' });
+  }
+
+  res.json(new ApiResponse(200, { uploadId: req.params.id }, 'Upload deleted'));
+});

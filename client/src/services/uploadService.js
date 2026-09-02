@@ -10,3 +10,4 @@ export const uploadFile = async (formData) => {
 };
 
 export const listUploads = async () => unwrap(await api.get('/uploads'));
+export const deleteUpload = async (id) => unwrap(await api.delete(`/uploads/${id}`));

@@ -1,5 +1,5 @@
 import { createContext, useEffect, useState } from 'react';
-import { getCurrentUser, loginRequest, logoutRequest, registerRequest } from '../services/authService.js';
+import { changePasswordRequest, getCurrentUser, loginRequest, logoutRequest, registerRequest, updateProfileRequest } from '../services/authService.js';
 
 export const AuthContext = createContext(null);
 
@@ -41,6 +41,16 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
+  const updateProfile = async (payload) => {
+    const data = await updateProfileRequest(payload);
+    setUser(data.user);
+    return data.user;
+  };
+
+  const changePassword = async (payload) => {
+    return changePasswordRequest(payload);
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -50,6 +60,8 @@ export const AuthProvider = ({ children }) => {
         login,
         register,
         logout,
+        updateProfile,
+        changePassword,
         refreshSession
       }}
     >

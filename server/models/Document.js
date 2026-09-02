@@ -27,6 +27,10 @@ const documentSchema = new mongoose.Schema(
       type: String,
       enum: ['manual', 'upload'],
       default: 'manual'
+    },
+    collaborationState: {
+      type: Buffer,
+      select: false
     }
   },
   { timestamps: true }

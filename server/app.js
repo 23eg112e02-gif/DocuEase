@@ -4,6 +4,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import compression from 'compression';
+import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { corsOptions } from './config/cors.js';
@@ -19,6 +20,11 @@ const app = express();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const uploadDir = path.join(__dirname, process.env.UPLOAD_DIR || 'uploads');
+const clientDistDir = path.join(__dirname, '..', 'client', 'dist');
+const clientIndexFile = path.join(clientDistDir, 'index.html');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
 const trustProxyHops = Number(process.env.TRUST_PROXY_HOPS || 0);
 
 if (trustProxyHops > 0) {
@@ -52,6 +58,23 @@ app.use('/api/documents', documentRoutes);
 app.use('/api/uploads', uploadRoutes);
 app.use('/api/export', exportRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+
+if (fs.existsSync(clientDistDir)) {
+  app.use(express.static(clientDistDir));
+}
+
+app.use((req, res, next) => {
+  if (req.method !== 'GET' || req.path.startsWith('/api')) {
+    return next();
+  }
+
+  if (fs.existsSync(clientIndexFile)) {
+    return res.sendFile(clientIndexFile);
+  }
+
+  const clientUrl = (process.env.CLIENT_URL || 'http://localhost:5173').replace(/\/$/, '');
+  return res.redirect(302, `${clientUrl}${req.originalUrl}`);
+});
 
 app.use(notFound);
 app.use(errorHandler);

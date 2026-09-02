@@ -1,6 +1,8 @@
 import 'dotenv/config';
+import { createServer } from 'http';
 import app from './app.js';
 import connectDB from './config/db.js';
+import { setupCollaborationServer } from './services/collaborationService.js';
 import { logInfo, logError } from './utils/logger.js';
 
 const port = process.env.PORT || 5000;
@@ -9,7 +11,9 @@ let httpServer;
 const start = async () => {
   try {
     await connectDB();
-    httpServer = app.listen(port, () => {
+    httpServer = createServer(app);
+    setupCollaborationServer(httpServer);
+    httpServer.listen(port, () => {
       logInfo(`DocuEase API listening on port ${port}`);
     });
   } catch (error) {

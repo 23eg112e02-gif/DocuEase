@@ -1,11 +1,11 @@
 import jwt from 'jsonwebtoken';
 
 const resolveSameSite = () => {
-  const configured = (process.env.COOKIE_SAME_SITE || 'lax').toLowerCase();
+  const configured = (process.env.COOKIE_SAME_SITE || '').toLowerCase();
   if (configured === 'none' || configured === 'strict' || configured === 'lax') {
     return configured;
   }
-  return 'lax';
+  return process.env.NODE_ENV === 'production' ? 'none' : 'lax';
 };
 
 const isCookieSecure = () => {
