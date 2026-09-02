@@ -1,12 +1,36 @@
 import Document from '../models/Document.js';
+import User from '../models/User.js';
 import asyncHandler from '../utils/asyncHandler.js';
 import ApiResponse from '../utils/ApiResponse.js';
 import { documentSchema } from '../utils/validators.js';
 
-export const listDocuments = asyncHandler(async (req, res) => {
-  const { search, status, sortBy = 'updatedAt', order = 'desc' } = req.query;
+const isOwner = (doc, userId) => String(doc.owner) === String(userId);
 
-  const query = { owner: req.user._id };
+const isCollaborator = (doc, userId) =>
+  (doc.collaborators || []).some((c) => String(c.user?._id || c.user) === String(userId));
+
+const canAccess = (doc, userId) => isOwner(doc, userId) || isCollaborator(doc, userId);
+
+const canEdit = (doc, userId) => {
+  if (isOwner(doc, userId)) return true;
+  const collab = (doc.collaborators || []).find((c) => String(c.user?._id || c.user) === String(userId));
+  return collab?.role === 'editor';
+};
+
+const accessQuery = (userId) => ({
+  $or: [{ owner: userId }, { 'collaborators.user': userId }]
+});
+
+export const listDocuments = asyncHandler(async (req, res) => {
+  const { search, status, sortBy = 'updatedAt', order = 'desc', filter } = req.query;
+
+  const query = accessQuery(req.user._id);
+
+  if (filter === 'owned') {
+    query.$or = [{ owner: req.user._id }];
+  } else if (filter === 'shared') {
+    query.$or = [{ 'collaborators.user': req.user._id }];
+  }
 
   if (status && ['draft', 'published', 'archived'].includes(status)) {
     query.status = status;
@@ -19,7 +43,11 @@ export const listDocuments = asyncHandler(async (req, res) => {
   const sortOrder = order === 'asc' ? 1 : -1;
   const sortField = ['updatedAt', 'createdAt', 'title'].includes(sortBy) ? sortBy : 'updatedAt';
 
-  const documents = await Document.find(query).sort({ [sortField]: sortOrder });
+  const documents = await Document.find(query)
+    .populate('owner', 'name email')
+    .populate('collaborators.user', 'name email')
+    .sort({ [sortField]: sortOrder });
+
   res.json(new ApiResponse(200, { documents }, 'Documents fetched'));
 });
 
@@ -38,12 +66,30 @@ export const createDocument = asyncHandler(async (req, res) => {
 });
 
 export const getDocument = asyncHandler(async (req, res) => {
-  const document = await Document.findOne({ _id: req.params.id, owner: req.user._id });
+  const document = await Document.findOne({
+    _id: req.params.id,
+    ...accessQuery(req.user._id)
+  })
+    .populate('owner', 'name email')
+    .populate('collaborators.user', 'name email');
+
   if (!document) {
-    return res.status(404).json({ success: false, message: 'Document not found' });
+    return res.status(404).json({ success: false, message: 'Document not found or access denied' });
   }
 
-  res.json(new ApiResponse(200, { document }, 'Document fetched'));
+  res.json(
+    new ApiResponse(
+      200,
+      {
+        document,
+        access: {
+          isOwner: isOwner(document, req.user._id),
+          canEdit: canEdit(document, req.user._id)
+        }
+      },
+      'Document fetched'
+    )
+  );
 });
 
 export const updateDocument = asyncHandler(async (req, res) => {
@@ -52,23 +98,39 @@ export const updateDocument = asyncHandler(async (req, res) => {
     return res.status(400).json({ success: false, message: 'Validation failed', errors: parsed.error.flatten() });
   }
 
-  const document = await Document.findOneAndUpdate(
-    { _id: req.params.id, owner: req.user._id },
+  const existing = await Document.findById(req.params.id);
+  if (!existing || !canAccess(existing, req.user._id)) {
+    return res.status(404).json({ success: false, message: 'Document not found or access denied' });
+  }
+
+  if (!canEdit(existing, req.user._id)) {
+    return res.status(403).json({ success: false, message: 'Viewer role cannot edit this document' });
+  }
+
+  // Only owner can change status
+  if (parsed.data.status && !isOwner(existing, req.user._id)) {
+    delete parsed.data.status;
+  }
+
+  const document = await Document.findByIdAndUpdate(
+    req.params.id,
     { $set: parsed.data },
     { new: true }
-  );
-
-  if (!document) {
-    return res.status(404).json({ success: false, message: 'Document not found' });
-  }
+  )
+    .populate('owner', 'name email')
+    .populate('collaborators.user', 'name email');
 
   res.json(new ApiResponse(200, { document }, 'Document updated'));
 });
 
 export const duplicateDocument = asyncHandler(async (req, res) => {
-  const original = await Document.findOne({ _id: req.params.id, owner: req.user._id });
+  const original = await Document.findOne({
+    _id: req.params.id,
+    ...accessQuery(req.user._id)
+  });
+
   if (!original) {
-    return res.status(404).json({ success: false, message: 'Document not found' });
+    return res.status(404).json({ success: false, message: 'Document not found or access denied' });
   }
 
   const duplicate = await Document.create({
@@ -83,10 +145,123 @@ export const duplicateDocument = asyncHandler(async (req, res) => {
 });
 
 export const deleteDocument = asyncHandler(async (req, res) => {
-  const document = await Document.findOneAndDelete({ _id: req.params.id, owner: req.user._id });
+  const document = await Document.findById(req.params.id);
   if (!document) {
     return res.status(404).json({ success: false, message: 'Document not found' });
   }
 
+  // Only owner can delete. Collaborators can only leave.
+  if (!isOwner(document, req.user._id)) {
+    return res.status(403).json({ success: false, message: 'Only the owner can delete this document' });
+  }
+
+  await Document.findByIdAndDelete(req.params.id);
   res.json(new ApiResponse(200, { documentId: req.params.id }, 'Document deleted'));
+});
+
+export const shareDocument = asyncHandler(async (req, res) => {
+  const { email, role = 'editor' } = req.body;
+
+  if (!email || typeof email !== 'string') {
+    return res.status(400).json({ success: false, message: 'Email is required' });
+  }
+
+  if (!['editor', 'viewer'].includes(role)) {
+    return res.status(400).json({ success: false, message: 'Role must be editor or viewer' });
+  }
+
+  const document = await Document.findById(req.params.id);
+  if (!document) {
+    return res.status(404).json({ success: false, message: 'Document not found' });
+  }
+
+  if (!isOwner(document, req.user._id)) {
+    return res.status(403).json({ success: false, message: 'Only the owner can share this document' });
+  }
+
+  const targetUser = await User.findOne({ email: email.trim().toLowerCase() }).select('_id name email');
+  if (!targetUser) {
+    return res.status(404).json({ success: false, message: 'No user found with that email. They must create an account first.' });
+  }
+
+  if (String(targetUser._id) === String(req.user._id)) {
+    return res.status(400).json({ success: false, message: 'You cannot share a document with yourself' });
+  }
+
+  const already = (document.collaborators || []).some((c) => String(c.user) === String(targetUser._id));
+  if (already) {
+    // Update role if already a collaborator
+    document.collaborators = document.collaborators.map((c) =>
+      String(c.user) === String(targetUser._id) ? { ...c.toObject?.() ?? c, role } : c
+    );
+  } else {
+    document.collaborators.push({
+      user: targetUser._id,
+      role,
+      addedAt: new Date()
+    });
+  }
+
+  await document.save();
+  await document.populate('collaborators.user', 'name email');
+  await document.populate('owner', 'name email');
+
+  res.json(
+    new ApiResponse(
+      200,
+      { document },
+      already ? 'Collaborator role updated' : 'Document shared successfully'
+    )
+  );
+});
+
+export const unshareDocument = asyncHandler(async (req, res) => {
+  const { userId } = req.params;
+
+  const document = await Document.findById(req.params.id);
+  if (!document) {
+    return res.status(404).json({ success: false, message: 'Document not found' });
+  }
+
+  const requesterIsOwner = isOwner(document, req.user._id);
+  const requesterIsTarget = String(req.user._id) === String(userId);
+
+  // Owner can remove anyone; collaborator can only remove themselves (leave)
+  if (!requesterIsOwner && !requesterIsTarget) {
+    return res.status(403).json({ success: false, message: 'Not allowed to remove this collaborator' });
+  }
+
+  document.collaborators = (document.collaborators || []).filter(
+    (c) => String(c.user) !== String(userId)
+  );
+  await document.save();
+  await document.populate('collaborators.user', 'name email');
+  await document.populate('owner', 'name email');
+
+  res.json(new ApiResponse(200, { document }, 'Collaborator removed'));
+});
+
+export const listCollaborators = asyncHandler(async (req, res) => {
+  const document = await Document.findOne({
+    _id: req.params.id,
+    ...accessQuery(req.user._id)
+  })
+    .populate('owner', 'name email')
+    .populate('collaborators.user', 'name email');
+
+  if (!document) {
+    return res.status(404).json({ success: false, message: 'Document not found or access denied' });
+  }
+
+  res.json(
+    new ApiResponse(
+      200,
+      {
+        owner: document.owner,
+        collaborators: document.collaborators || [],
+        isOwner: isOwner(document, req.user._id)
+      },
+      'Collaborators fetched'
+    )
+  );
 });
