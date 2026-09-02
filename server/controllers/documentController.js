@@ -1,4 +1,4 @@
-import Document from '../models/Document.js';
+import Document, { MAX_VERSIONS } from '../models/Document.js';
 import User from '../models/User.js';
 import asyncHandler from '../utils/asyncHandler.js';
 import ApiResponse from '../utils/ApiResponse.js';
@@ -20,6 +20,16 @@ const canEdit = (doc, userId) => {
 const accessQuery = (userId) => ({
   $or: [{ owner: userId }, { 'collaborators.user': userId }]
 });
+
+const pushVersionSnapshot = (doc, userId, label = '') => {
+  const snapshot = {
+    title: doc.title,
+    content: doc.content,
+    savedBy: userId,
+    label
+  };
+  doc.versions = [snapshot, ...(doc.versions || [])].slice(0, MAX_VERSIONS);
+};
 
 export const listDocuments = asyncHandler(async (req, res) => {
   const { search, status, sortBy = 'updatedAt', order = 'desc', filter } = req.query;
@@ -44,6 +54,7 @@ export const listDocuments = asyncHandler(async (req, res) => {
   const sortField = ['updatedAt', 'createdAt', 'title'].includes(sortBy) ? sortBy : 'updatedAt';
 
   const documents = await Document.find(query)
+    .select('-versions')
     .populate('owner', 'name email')
     .populate('collaborators.user', 'name email')
     .sort({ [sortField]: sortOrder });
@@ -70,6 +81,7 @@ export const getDocument = asyncHandler(async (req, res) => {
     _id: req.params.id,
     ...accessQuery(req.user._id)
   })
+    .select('-versions')
     .populate('owner', 'name email')
     .populate('collaborators.user', 'name email');
 
@@ -107,16 +119,23 @@ export const updateDocument = asyncHandler(async (req, res) => {
     return res.status(403).json({ success: false, message: 'Viewer role cannot edit this document' });
   }
 
-  // Only owner can change status
   if (parsed.data.status && !isOwner(existing, req.user._id)) {
     delete parsed.data.status;
   }
 
-  const document = await Document.findByIdAndUpdate(
-    req.params.id,
-    { $set: parsed.data },
-    { new: true }
-  )
+  const contentChanged =
+    (parsed.data.content !== undefined && parsed.data.content !== existing.content) ||
+    (parsed.data.title !== undefined && parsed.data.title !== existing.title);
+
+  if (contentChanged) {
+    pushVersionSnapshot(existing, req.user._id);
+  }
+
+  Object.assign(existing, parsed.data);
+  await existing.save();
+
+  const document = await Document.findById(existing._id)
+    .select('-versions')
     .populate('owner', 'name email')
     .populate('collaborators.user', 'name email');
 
@@ -150,7 +169,6 @@ export const deleteDocument = asyncHandler(async (req, res) => {
     return res.status(404).json({ success: false, message: 'Document not found' });
   }
 
-  // Only owner can delete. Collaborators can only leave.
   if (!isOwner(document, req.user._id)) {
     return res.status(403).json({ success: false, message: 'Only the owner can delete this document' });
   }
@@ -190,7 +208,6 @@ export const shareDocument = asyncHandler(async (req, res) => {
 
   const already = (document.collaborators || []).some((c) => String(c.user) === String(targetUser._id));
   if (already) {
-    // Update role if already a collaborator
     document.collaborators = document.collaborators.map((c) =>
       String(c.user) === String(targetUser._id) ? { ...c.toObject?.() ?? c, role } : c
     );
@@ -226,7 +243,6 @@ export const unshareDocument = asyncHandler(async (req, res) => {
   const requesterIsOwner = isOwner(document, req.user._id);
   const requesterIsTarget = String(req.user._id) === String(userId);
 
-  // Owner can remove anyone; collaborator can only remove themselves (leave)
   if (!requesterIsOwner && !requesterIsTarget) {
     return res.status(403).json({ success: false, message: 'Not allowed to remove this collaborator' });
   }
@@ -264,4 +280,60 @@ export const listCollaborators = asyncHandler(async (req, res) => {
       'Collaborators fetched'
     )
   );
+});
+
+export const listVersions = asyncHandler(async (req, res) => {
+  const document = await Document.findOne({
+    _id: req.params.id,
+    ...accessQuery(req.user._id)
+  })
+    .select('title versions')
+    .populate('versions.savedBy', 'name email');
+
+  if (!document) {
+    return res.status(404).json({ success: false, message: 'Document not found or access denied' });
+  }
+
+  const versions = (document.versions || []).map((v) => ({
+    _id: v._id,
+    title: v.title,
+    label: v.label,
+    createdAt: v.createdAt,
+    savedBy: v.savedBy,
+    preview: (v.content || '').replace(/<[^>]+>/g, ' ').slice(0, 120)
+  }));
+
+  res.json(new ApiResponse(200, { versions, currentTitle: document.title }, 'Versions fetched'));
+});
+
+export const restoreVersion = asyncHandler(async (req, res) => {
+  const { versionId } = req.params;
+
+  const document = await Document.findById(req.params.id);
+  if (!document || !canAccess(document, req.user._id)) {
+    return res.status(404).json({ success: false, message: 'Document not found or access denied' });
+  }
+
+  if (!canEdit(document, req.user._id)) {
+    return res.status(403).json({ success: false, message: 'Viewer role cannot restore versions' });
+  }
+
+  const version = (document.versions || []).id(versionId);
+  if (!version) {
+    return res.status(404).json({ success: false, message: 'Version not found' });
+  }
+
+  // Snapshot current state before restore
+  pushVersionSnapshot(document, req.user._id, 'Before restore');
+
+  document.title = version.title;
+  document.content = version.content;
+  await document.save();
+
+  const updated = await Document.findById(document._id)
+    .select('-versions')
+    .populate('owner', 'name email')
+    .populate('collaborators.user', 'name email');
+
+  res.json(new ApiResponse(200, { document: updated }, 'Version restored'));
 });
