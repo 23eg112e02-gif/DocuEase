@@ -1,16 +1,17 @@
-import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import RichTextEditor from '../../editor/RichTextEditor.jsx';
 import PresenceStack from '../../components/editor/PresenceStack.jsx';
 import ShareModal from '../../components/editor/ShareModal.jsx';
+import VersionHistoryModal from '../../components/editor/VersionHistoryModal.jsx';
 import { useDocument } from '../../hooks/useDocument.js';
 import { useCollaboration } from '../../hooks/useCollaboration.js';
 import { useAuth } from '../../hooks/useAuth.js';
 import { createDocument, updateDocument, deleteDocument } from '../../services/documentService.js';
 import { exportDocx, exportHtml, exportMd, exportPdf, exportTxt } from '../../services/exportService.js';
 import { DOCUMENT_STATUSES } from '../../utils/constants.js';
-import { 
-  Cloud, CloudCheck, Star, Share2, ArrowLeft, 
+import {
+  Star, Share2, ArrowLeft, History,
   CheckCircle2, RefreshCw, AlertCircle, FileText
 } from 'lucide-react';
 
@@ -25,22 +26,22 @@ const DocumentEditorPage = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { document, loading } = useDocument(id);
-  
+
   const [form, setForm] = useState(emptyDocument);
-  const [saveStatus, setSaveStatus] = useState('Saved to Cloud'); // 'Saving...', 'Saved to Cloud', 'Unsaved changes'
+  const [saveStatus, setSaveStatus] = useState('Saved to Cloud');
   const [isStarred, setIsStarred] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [seedReady, setSeedReady] = useState(false);
   const autoSaveTimerRef = useRef(null);
 
   const collaborationEnabled = Boolean(id && id !== 'new' && user?.id);
-  const { ydoc, provider, collaborators, connectionStatus, isSynced, collaborationUser } = useCollaboration({
+  const { ydoc, provider, collaborators, isSynced, collaborationUser } = useCollaboration({
     enabled: collaborationEnabled,
     documentId: id,
     user
   });
 
-  // Sync state from server document
   useEffect(() => {
     if (document) {
       setForm({
@@ -53,7 +54,6 @@ const DocumentEditorPage = () => {
     }
   }, [document]);
 
-  // Collaborative seeding
   useEffect(() => {
     if (!collaborationEnabled || !ydoc || !document?.content || !isSynced) {
       return;
@@ -63,10 +63,9 @@ const DocumentEditorPage = () => {
     setSeedReady(fragment.length === 0);
   }, [collaborationEnabled, ydoc, document?.content, isSynced]);
 
-  // Debounced auto-save function
   const triggerAutoSave = useCallback((updatedForm) => {
-    if (id === 'new') return; // Don't auto-save before initial creation
-    
+    if (id === 'new') return;
+
     setSaveStatus('Saving...');
     if (autoSaveTimerRef.current) {
       clearTimeout(autoSaveTimerRef.current);
@@ -117,6 +116,17 @@ const DocumentEditorPage = () => {
     }
   };
 
+  const handleVersionRestored = (restoredDoc) => {
+    if (!restoredDoc) return;
+    setForm({
+      title: restoredDoc.title || 'Untitled Document',
+      content: restoredDoc.content || '',
+      status: restoredDoc.status || 'draft',
+      source: restoredDoc.source || 'manual'
+    });
+    setSaveStatus('Saved to Cloud');
+  };
+
   const exportPayload = {
     documentId: id !== 'new' ? id : undefined,
     title: form.title || 'Untitled Document',
@@ -134,10 +144,8 @@ const DocumentEditorPage = () => {
 
   return (
     <div className="space-y-3 max-w-7xl mx-auto px-2 sm:px-4 py-2">
-      {/* Google Docs Top Bar */}
       <div className="flex flex-wrap items-center justify-between gap-3 bg-white px-4 py-2.5 rounded-2xl border border-slate-200/80 shadow-xs no-print">
         <div className="flex items-center gap-3 min-w-0">
-          {/* Docs Icon / Back link */}
           <Link
             to="/dashboard"
             className="p-1.5 rounded-xl hover:bg-slate-100 text-blue-600 transition"
@@ -193,7 +201,6 @@ const DocumentEditorPage = () => {
 
               <span>&bull;</span>
 
-              {/* Status pill select */}
               <select
                 value={form.status}
                 onChange={(e) => updateField('status', e.target.value)}
@@ -209,9 +216,20 @@ const DocumentEditorPage = () => {
           </div>
         </div>
 
-        {/* Right side actions: Presence avatars & Share button */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <PresenceStack users={collaborators} />
+
+          {id !== 'new' && (
+            <button
+              type="button"
+              onClick={() => setIsHistoryOpen(true)}
+              className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-white hover:bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 transition"
+              title="Version history"
+            >
+              <History size={14} />
+              <span className="hidden sm:inline">History</span>
+            </button>
+          )}
 
           <button
             type="button"
@@ -224,7 +242,6 @@ const DocumentEditorPage = () => {
         </div>
       </div>
 
-      {/* Full Google Docs Rich Text Editor */}
       <RichTextEditor
         value={form.content}
         onChange={(html) => updateField('content', html)}
@@ -249,7 +266,6 @@ const DocumentEditorPage = () => {
         saveStatus={saveStatus}
       />
 
-      {/* Share & Collaboration Modal */}
       <ShareModal
         isOpen={isShareModalOpen}
         onClose={() => setIsShareModalOpen(false)}
@@ -257,6 +273,13 @@ const DocumentEditorPage = () => {
         title={form.title}
         collaborators={collaborators}
         status={form.status}
+      />
+
+      <VersionHistoryModal
+        isOpen={isHistoryOpen}
+        onClose={() => setIsHistoryOpen(false)}
+        documentId={id}
+        onRestored={handleVersionRestored}
       />
     </div>
   );
