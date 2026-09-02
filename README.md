@@ -1,41 +1,123 @@
+<div align="center">
+
 # DocuEase
 
-Google Docs-style document editor with guest mode, cloud accounts, real-time collaboration, sharing, version history, and multi-format export.
+**A full-stack Google Docs–style collaborative editor**
 
-**Live**
-- Frontend: https://docu-ease-client.vercel.app
-- Backend: https://docuease.onrender.com
+Real-time multi-user editing · Guest + Account modes · Share · Version history · Multi-format export
 
----
+<br/>
 
-## What works
+[![Live Demo](https://img.shields.io/badge/Live_Demo-docu--ease--client.vercel.app-blue?style=for-the-badge&logo=vercel)](https://docu-ease-client.vercel.app/)
+[![Backend](https://img.shields.io/badge/API-Render-46E3B7?style=for-the-badge&logo=render)](https://docuease.onrender.com/api/health)
 
-| Feature | Status |
-|---------|--------|
-| Guest editor (browser-local only) | Working |
-| Guest → account migration | Working |
-| Account documents (MongoDB) | Working |
-| TipTap rich editor (headings, tables, images, checklists, etc.) | Working |
-| Real-time collaboration (Yjs + WebSocket) | Working |
-| Share by email (editor / viewer roles) | Working |
-| Version history (auto-snapshot on save, restore) | Working |
-| Export PDF, DOCX, TXT, Markdown, HTML | Working |
-| Templates | Working |
-| File upload / import (PDF, DOCX, TXT) | Working |
-| Auth (register, login, refresh, cookies) | Working |
-| Dashboard + uploads pages | Working |
+<br/>
+
+![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white)
+![Vite](https://img.shields.io/badge/Vite-5-646CFF?logo=vite&logoColor=white)
+![Node.js](https://img.shields.io/badge/Node.js-Express-339933?logo=nodedotjs&logoColor=white)
+![MongoDB](https://img.shields.io/badge/MongoDB-Mongoose-47A248?logo=mongodb&logoColor=white)
+![Yjs](https://img.shields.io/badge/Yjs-CRDT-FF6B00)
+![TipTap](https://img.shields.io/badge/TipTap-Editor-FF6B6B)
+
+</div>
 
 ---
 
-## Stack
+## Live Demo
 
-- **Client:** React 18, Vite, Tailwind, TipTap, Yjs, React Router
-- **Server:** Node.js, Express, MongoDB/Mongoose, `ws`, JWT cookies
-- **Deploy:** Vercel (frontend) + Render (API + WebSocket)
+**Frontend:** [https://docu-ease-client.vercel.app](https://docu-ease-client.vercel.app/)  
+**Backend health:** [https://docuease.onrender.com/api/health](https://docuease.onrender.com/api/health)
+
+> **Tip:** Create two accounts in different browsers (or one normal + one incognito). Share a document from Account A to Account B’s email and watch real-time collaboration.
 
 ---
 
-## Local setup
+## Why this project
+
+DocuEase is a production-deployed MERN application that solves a real product problem: **document editing that works for guests and authenticated users**, with true multi-user collaboration — not a toy CRDT demo.
+
+It demonstrates:
+- Full-stack ownership (frontend + API + WebSockets + DB + deploy)
+- Cross-origin auth between independent hosts (Vercel + Render)
+- CRDT-based realtime sync with access control
+- Practical product features: share roles, version history, exports, templates
+
+---
+
+## Features
+
+### Editing
+- TipTap / ProseMirror rich-text editor
+- Headings, bold/italic/underline, lists, checklists, tables, links, images
+- Find & replace, word count, print layout
+- Document templates (Meeting Notes, Proposal, Resume, Status Report, Blank)
+
+### Guest & Account modes
+- **Guest mode** — edit immediately, data stays in browser storage (no signup)
+- **Account mode** — persistent MongoDB documents, dashboard, uploads
+- One-click **guest → cloud account** migration
+
+### Collaboration
+- Real-time multi-user editing via **Yjs CRDT + WebSockets**
+- Presence avatars and live cursors
+- Share by email with **Editor** or **Viewer** roles
+- Access-controlled collaboration rooms (owner + collaborators only)
+
+### Version history
+- Automatic snapshots on content/title change (last 30 versions)
+- Restore any previous version from the editor
+
+### Export & import
+- Export: **PDF · DOCX · TXT · Markdown · HTML**
+- Import: PDF, DOCX, TXT → editable document
+
+### Auth & deployment
+- JWT access + refresh tokens
+- httpOnly cookies with `SameSite=None` + `Secure` for cross-site production
+- Split deploy: Vercel (SPA) + Render (API + WS) + MongoDB Atlas
+
+---
+
+## Architecture
+
+```
+┌──────────────────────┐     REST + cookies      ┌──────────────────────┐
+│  Vercel (React SPA)  │ ───────────────────────► │  Render (Node API)   │
+│  docu-ease-client    │ ◄─────────────────────── │  docuease.onrender   │
+└──────────────────────┘     WebSocket (Yjs)      └──────────┬───────────┘
+                                                             │
+                                                             ▼
+                                                    ┌─────────────────┐
+                                                    │  MongoDB Atlas  │
+                                                    └─────────────────┘
+```
+
+| Layer | Technology |
+|-------|------------|
+| UI | React 18, Vite, Tailwind CSS, TipTap |
+| State / realtime | Yjs, y-protocols, custom WebSocket provider |
+| API | Express, Mongoose, JWT, Zod validation |
+| Files | multer, mammoth, pdf-parse, pdfkit, docx |
+| Hosting | Vercel + Render + MongoDB Atlas |
+
+---
+
+## Tech decisions (what recruiters usually ask)
+
+| Decision | Why |
+|----------|-----|
+| **Yjs over operational transform** | CRDTs handle concurrent edits without a central transform server; simpler offline-friendly model |
+| **Split Vercel + Render** | Free-tier friendly; keeps long-lived WebSockets on Render while SPA sits on CDN |
+| **Cookie + Bearer fallback** | Cross-origin cookies need `SameSite=None`; Bearer fallback covers edge cases |
+| **Guest-first UX** | Removes signup friction; still allows upgrade path to persistent storage |
+| **Role-based share (editor/viewer)** | Real access control, not just “anyone with the link” |
+
+---
+
+## Local development
+
+**Requirements:** Node.js ≥ 18, MongoDB
 
 ```bash
 git clone https://github.com/23eg112e02-gif/DocuEase.git
@@ -51,9 +133,6 @@ MONGODB_URI=mongodb://127.0.0.1:27017/docuease
 CLIENT_URL=http://localhost:5173
 JWT_ACCESS_SECRET=dev-access-secret
 JWT_REFRESH_SECRET=dev-refresh-secret
-ACCESS_TOKEN_EXPIRES_IN=15m
-REFRESH_TOKEN_EXPIRES_IN=7d
-UPLOAD_DIR=uploads
 ```
 
 **`client/.env`**
@@ -66,19 +145,19 @@ VITE_COLLAB_WS_URL=ws://localhost:5000
 npm run dev
 ```
 
-- Client: http://localhost:5173
-- API: http://localhost:5000
+- App → http://localhost:5173  
+- API → http://localhost:5000
 
 ---
 
-## Production env
+## Production environment
 
-### Render (backend)
+### Render (API + WebSocket)
 
-| Variable | Value |
-|----------|-------|
+| Variable | Example |
+|----------|---------|
 | `NODE_ENV` | `production` |
-| `MONGODB_URI` | Atlas connection string |
+| `MONGODB_URI` | Atlas URI |
 | `CLIENT_URL` | `https://docu-ease-client.vercel.app` |
 | `JWT_ACCESS_SECRET` | strong random string |
 | `JWT_REFRESH_SECRET` | strong random string |
@@ -86,72 +165,66 @@ npm run dev
 | `COOKIE_SECURE` | `true` |
 | `TRUST_PROXY_HOPS` | `1` |
 
-Root directory: `server`  
-Start: `npm run start`  
-Health: `/api/health`
-
 ### Vercel (frontend)
 
-| Variable | Value |
-|----------|-------|
+| Variable | Example |
+|----------|---------|
 | `VITE_API_URL` | `https://docuease.onrender.com/api` |
 | `VITE_COLLAB_WS_URL` | `wss://docuease.onrender.com` |
 
-Root directory: `client` (or use root `vercel.json`)  
-Build: `npm run build`  
-Output: `dist`
-
-**Important:** Vite only reads `VITE_*` vars at build time. After changing them, redeploy with a clean build.
+> Vite injects `VITE_*` at **build time**. After changing env vars, trigger a fresh redeploy.
 
 ---
 
-## Sharing
+## API overview
 
-1. Owner opens a document → **Share**
-2. Invite by email (user must already have an account)
-3. Role: `editor` or `viewer`
-4. Collaborator opens the same document URL and can collaborate in real time
-
-API:
-- `POST /api/documents/:id/share` `{ email, role }`
-- `DELETE /api/documents/:id/share/:userId`
-- `GET /api/documents/:id/collaborators`
-
----
-
-## Version history
-
-- Every title/content change creates a snapshot (max 30)
-- Editor toolbar → **History** → restore any version
-- Current content is snapshotted before restore
-
-API:
-- `GET /api/documents/:id/versions`
-- `POST /api/documents/:id/versions/:versionId/restore`
+| Area | Endpoints |
+|------|-----------|
+| Auth | `POST /auth/register`, `/login`, `/refresh`, `/logout` · `GET /auth/me` |
+| Documents | `GET/POST /documents` · `GET/PUT/DELETE /documents/:id` |
+| Share | `POST /documents/:id/share` · `DELETE .../share/:userId` · `GET .../collaborators` |
+| Versions | `GET /documents/:id/versions` · `POST .../versions/:id/restore` |
+| Export | `POST /export/pdf` · `/docx` · `/txt` · `/md` |
+| Uploads | `GET/POST /uploads` · `DELETE /uploads/:id` |
+| Collab | `WS /collaboration/:documentId` |
 
 ---
 
-## Main API surface
+## Project structure
 
-| Method | Path | Auth |
-|--------|------|------|
-| GET | `/api/health` | Public |
-| POST | `/api/auth/register` | Public |
-| POST | `/api/auth/login` | Public |
-| POST | `/api/auth/refresh` | Cookie |
-| GET | `/api/auth/me` | Required |
-| GET/POST | `/api/documents` | Required |
-| GET/PUT/DELETE | `/api/documents/:id` | Required (owner or collaborator) |
-| POST | `/api/documents/:id/share` | Owner |
-| GET | `/api/documents/:id/versions` | Required |
-| POST | `/api/export/pdf\|docx\|txt\|md` | Optional |
-| WS | `/collaboration/:id` | Cookie/token + access |
+```
+DocuEase/
+├── client/                 # React + Vite SPA
+│   ├── src/
+│   │   ├── components/     # Editor, Share, Version history, UI
+│   │   ├── pages/          # Home, Guest, Dashboard, Document, Auth
+│   │   ├── services/       # API + export clients
+│   │   ├── hooks/          # Auth, document, collaboration
+│   │   └── editor/         # TipTap + Yjs wiring
+│   └── ...
+├── server/                 # Express API + WebSocket collab server
+│   ├── controllers/
+│   ├── models/             # User, Document (+ collaborators, versions)
+│   ├── routes/
+│   ├── services/           # tokens, collab, export
+│   └── middleware/
+└── README.md
+```
 
 ---
 
-## Notes / limits
+## Known limits (honest)
 
-- No email invite system — invitee must register first
-- Version history is basic (no side-by-side diff UI)
-- Free Render instances sleep; first request after idle can be slow
-- Exports flatten rich HTML to plain text for PDF/DOCX/TXT (tables/images limited fidelity)
+- Invitee must already have an account (no email delivery service)
+- Free Render instances cold-start after idle (~30–60s)
+- PDF/DOCX export flattens complex HTML (tables/images limited fidelity)
+- Version history has restore UI; no side-by-side visual diff yet
+
+---
+
+## Author
+
+Built as a portfolio project to demonstrate full-stack engineering: realtime systems, auth across origins, product-facing collaboration features, and production deployment.
+
+**Live app:** [https://docu-ease-client.vercel.app](https://docu-ease-client.vercel.app/)  
+**Repo:** [github.com/23eg112e02-gif/DocuEase](https://github.com/23eg112e02-gif/DocuEase)
