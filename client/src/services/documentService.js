@@ -10,3 +10,7 @@ export const deleteDocument = async (id) => unwrap(await api.delete(`/documents/
 export const listCollaborators = async (id) => unwrap(await api.get(`/documents/${id}/collaborators`));
 export const shareDocument = async (id, payload) => unwrap(await api.post(`/documents/${id}/share`, payload));
 export const unshareDocument = async (id, userId) => unwrap(await api.delete(`/documents/${id}/share/${userId}`));
+
+export const listVersions = async (id) => unwrap(await api.get(`/documents/${id}/versions`));
+export const restoreVersion = async (id, versionId) =>
+  unwrap(await api.post(`/documents/${id}/versions/${versionId}/restore`));
