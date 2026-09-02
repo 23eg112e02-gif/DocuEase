@@ -6,6 +6,8 @@ import {
   getDocument,
   listCollaborators,
   listDocuments,
+  listVersions,
+  restoreVersion,
   shareDocument,
   unshareDocument,
   updateDocument
@@ -27,5 +29,9 @@ router.delete('/:id', validateObjectIdParam('id'), deleteDocument);
 router.get('/:id/collaborators', validateObjectIdParam('id'), listCollaborators);
 router.post('/:id/share', validateObjectIdParam('id'), shareDocument);
 router.delete('/:id/share/:userId', validateObjectIdParam('id'), validateObjectIdParam('userId'), unshareDocument);
+
+// Version history
+router.get('/:id/versions', validateObjectIdParam('id'), listVersions);
+router.post('/:id/versions/:versionId/restore', validateObjectIdParam('id'), validateObjectIdParam('versionId'), restoreVersion);
 
 export default router;
