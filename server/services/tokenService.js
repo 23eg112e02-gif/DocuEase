@@ -5,22 +5,25 @@ const resolveSameSite = () => {
   if (configured === 'none' || configured === 'strict' || configured === 'lax') {
     return configured;
   }
+  // Cross-origin (Vercel frontend + Render API) requires SameSite=None in production
   return process.env.NODE_ENV === 'production' ? 'none' : 'lax';
 };
 
 const isCookieSecure = () => {
-  if (process.env.COOKIE_SECURE === 'true') {
-    return true;
-  }
-  if (process.env.COOKIE_SECURE === 'false') {
-    return false;
-  }
+  if (process.env.COOKIE_SECURE === 'true') return true;
+  if (process.env.COOKIE_SECURE === 'false') return false;
+  // SameSite=None requires Secure=true
   return process.env.NODE_ENV === 'production';
 };
 
 const getCookieOptions = () => {
   const sameSite = resolveSameSite();
-  const secure = isCookieSecure();
+  let secure = isCookieSecure();
+
+  // Browser requirement: SameSite=None must be Secure
+  if (sameSite === 'none') {
+    secure = true;
+  }
 
   return {
     httpOnly: true,
@@ -31,7 +34,12 @@ const getCookieOptions = () => {
   };
 };
 
-const signToken = (payload, secret, expiresIn) => jwt.sign(payload, secret, { expiresIn });
+const signToken = (payload, secret, expiresIn) => {
+  if (!secret) {
+    throw new Error('JWT secret is not configured');
+  }
+  return jwt.sign(payload, secret, { expiresIn });
+};
 
 export const issueTokenPair = (user) => {
   const payload = {
@@ -63,6 +71,7 @@ export const setAuthCookies = (res, accessToken, refreshToken) => {
 
 export const clearAuthCookies = (res) => {
   const common = getCookieOptions();
+  // clearCookie must use the same path/domain/sameSite/secure as set
   res.clearCookie('accessToken', common);
   res.clearCookie('refreshToken', common);
 };
