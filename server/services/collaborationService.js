@@ -302,7 +302,11 @@ const attachSocketToRoom = async (socket, request) => {
     return;
   }
 
-  const canAccess = await Document.exists({ _id: docId, owner: userId });
+  // Allow owner OR any collaborator
+  const canAccess = await Document.exists({
+    _id: docId,
+    $or: [{ owner: userId }, { 'collaborators.user': userId }]
+  });
   if (!canAccess) {
     socket.close(4403, 'Document access denied');
     return;
