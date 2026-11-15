@@ -31,14 +31,21 @@ if (trustProxyHops > 0) {
   app.set('trust proxy', trustProxyHops);
 }
 
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: { directives: { defaultSrc: ["'self'"], scriptSrc: ["'self'"], styleSrc: ["'self'", "'unsafe-inline'"], imgSrc: ["'self'", 'data:', 'https:'], connectSrc: ["'self'", 'https:', 'wss:'] } },
+  hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
+  frameguard: { action: 'deny' },
+  noSniff: true
+}));
 app.use(cors(corsOptions));
 app.use(compression());
-app.use(express.json({ limit: '2mb' }));
+app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
-app.use('/uploads', express.static(uploadDir));
+if (process.env.SERVE_UPLOADS_PUBLIC === 'true') {
+  app.use('/uploads', express.static(uploadDir));
+}
 app.use('/api', apiLimiter);
 
 app.get('/api/health', (_req, res) => {

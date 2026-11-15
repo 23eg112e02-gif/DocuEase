@@ -3,7 +3,7 @@ import { z } from 'zod';
 export const registerSchema = z.object({
   name: z.string().trim().min(2, 'Name is required'),
   email: z.string().trim().email('Valid email is required'),
-  password: z.string().min(8, 'Password must be at least 8 characters')
+  password: z.string().min(8).regex(/[A-Z]/, 'Password must include an uppercase letter').regex(/[a-z]/, 'Password must include a lowercase letter').regex(/\d/, 'Password must include a digit')
 });
 
 export const loginSchema = z.object({
@@ -25,6 +25,13 @@ export const profileSchema = z.object({
 
 export const passwordSchema = z.object({
   currentPassword: z.string().min(1, 'Current password is required'),
-  newPassword: z.string().min(8, 'New password must be at least 8 characters')
+  newPassword: z.string().min(8).regex(/[A-Z]/).regex(/[a-z]/).regex(/\d/)
 });
+
+export const forgotPasswordSchema = z.object({ email: z.string().trim().email('Valid email is required') });
+export const resetPasswordSchema = z.object({
+  token: z.string().min(1),
+  password: z.string().min(8).regex(/[A-Z]/).regex(/[a-z]/).regex(/\d/)
+});
+export const deleteAccountSchema = z.object({ password: z.string().min(1, 'Password is required') });
 

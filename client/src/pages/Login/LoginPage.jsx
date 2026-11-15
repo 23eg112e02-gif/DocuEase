@@ -68,6 +68,9 @@ const LoginPage = () => {
       {error ? <div className="rounded-xl bg-red-50 p-3 text-xs text-red-700 border border-red-200">{error}</div> : null}
       <Input label="Email" name="email" type="email" autoComplete="email" value={form.email} onChange={handleChange} required />
       <Input label="Password" name="password" type="password" autoComplete="current-password" value={form.password} onChange={handleChange} required />
+      <div className="text-right text-sm">
+        <Link to="/forgot-password" className="font-semibold text-blue-600 hover:underline">Forgot password?</Link>
+      </div>
     </AuthForm>
   );
 };

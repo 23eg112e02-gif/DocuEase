@@ -24,7 +24,11 @@ services:
       - key: UPLOAD_DIR
         value: uploads
       - key: MAX_UPLOAD_SIZE
-        value: "10485760"
+        value: "5242880"
+      - key: SERVE_UPLOADS_PUBLIC
+        value: "false"
+      - key: ALLOW_VERCEL_PREVIEWS
+        value: "false"
       - key: TRUST_PROXY_HOPS
         value: "1"
       - key: COOKIE_SAME_SITE
@@ -33,3 +37,15 @@ services:
         value: "true"
       - key: COOKIE_DOMAIN
         value: ""
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_FROM
+        sync: false
+      - key: SMTP_SECURE
+        value: "true"

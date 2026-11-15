@@ -23,6 +23,7 @@
     "mongoose": "^8.5.3",
     "morgan": "^1.10.0",
     "multer": "^2.0.2",
+    "nodemailer": "^10.5.0",
     "pdf-parse": "^1.1.1",
     "pdfkit": "^0.15.0",
     "ws": "^8.21.1",

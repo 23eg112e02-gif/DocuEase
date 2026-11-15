@@ -1,5 +1,5 @@
 import User from '../models/User.js';
-import { issueTokenPair, setAuthCookies, verifyAccessToken, verifyRefreshToken } from '../services/tokenService.js';
+import { clearAuthCookies, rotateRefreshToken, setAuthCookies, verifyAccessToken } from '../services/tokenService.js';
 
 const extractBearerToken = (req) => {
   const authorization = req.headers.authorization;
@@ -13,7 +13,7 @@ const loadUserFromPayload = async (payload) => {
   if (!payload?.id) {
     return null;
   }
-  return User.findById(payload.id).select('-password');
+  return User.findOne({ _id: payload.id, deletedAt: null }).select('-password');
 };
 
 export const protect = async (req, res, next) => {
@@ -24,24 +24,26 @@ export const protect = async (req, res, next) => {
       const user = await loadUserFromPayload(payload);
       if (user) {
         req.user = user;
+        req.refreshToken = req.cookies?.refreshToken;
         return next();
       }
     }
 
     const refreshToken = req.cookies?.refreshToken;
     if (refreshToken) {
-      const payload = verifyRefreshToken(refreshToken);
-      const user = await loadUserFromPayload(payload);
-      if (user) {
-        const tokens = issueTokenPair(user);
-        setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
-        req.user = user;
-        return next();
-      }
+      const { user, tokens } = await rotateRefreshToken(refreshToken, {
+        ip: req.ip,
+        userAgent: req.get('user-agent')
+      });
+      setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
+      req.user = user;
+      req.refreshToken = tokens.refreshToken;
+      return next();
     }
 
     return res.status(401).json({ success: false, message: 'Not authorized' });
   } catch (_error) {
+    clearAuthCookies(res);
     return res.status(401).json({ success: false, message: 'Not authorized' });
   }
 };
@@ -59,4 +61,11 @@ export const optionalAuth = async (req, _res, next) => {
   } finally {
     next();
   }
+};
+
+export const requireAdmin = (req, res, next) => {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ success: false, message: 'Admin access required' });
+  }
+  return next();
 };

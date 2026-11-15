@@ -5,6 +5,8 @@ import AppShell from '../components/layout/AppShell.jsx';
 const HomePage = lazy(() => import('../pages/Home/HomePage.jsx'));
 const LoginPage = lazy(() => import('../pages/Login/LoginPage.jsx'));
 const RegisterPage = lazy(() => import('../pages/Register/RegisterPage.jsx'));
+const ForgotPasswordPage = lazy(() => import('../pages/ForgotPassword/ForgotPasswordPage.jsx'));
+const ResetPasswordPage = lazy(() => import('../pages/ResetPassword/ResetPasswordPage.jsx'));
 const DashboardPage = lazy(() => import('../pages/Dashboard/DashboardPage.jsx'));
 const GuestEditorPage = lazy(() => import('../pages/GuestEditor/GuestEditorPage.jsx'));
 const DocumentEditorPage = lazy(() => import('../pages/DocumentEditor/DocumentEditorPage.jsx'));
@@ -26,6 +28,8 @@ const AppRoutes = () => (
         <Route path="/guest" element={<GuestEditorPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route
           path="/dashboard"
           element={
