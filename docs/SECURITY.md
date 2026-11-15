@@ -1,34 +1,33 @@
-# DocuEase Security Hardening
+# Security Notes
 
-DocuEase keeps the Express/MongoDB API on Render and the Vite React client on Vercel.
+DocuEase is deployed with the React/Vite frontend on Vercel and the Express/MongoDB API on Render.
 
-## Authentication
+## Auth and sessions
 
-- Passwords are excluded from normal user queries and require strong passwords.
+- Passwords are excluded from normal user queries and validated for length, uppercase, lowercase, and digit requirements.
 - Five failed logins lock an account for 15 minutes.
-- Access tokens are short-lived and refresh tokens are stored as SHA-256 hashes.
-- Refresh-token rotation removes used tokens and detects reuse by revoking all sessions.
-- Auth cookies are `httpOnly`, environment-configured for `Secure` and `SameSite`, and cleared on logout and password changes.
-- Password reset tokens are random, hashed, single-use, and expire after 15 minutes.
-- Forgot-password responses do not reveal whether an email is registered.
+- Access tokens are short-lived JWTs. Refresh tokens are stored as SHA-256 hashes, rotated on use, and removed on reuse detection.
+- HTTP-only cookies use production `Secure` and `SameSite` settings for the cross-origin Vercel/Render deployment.
+- Forgot-password always returns the same generic response. Reset tokens are random, hashed, single-use, and expire after 15 minutes.
+- Logout-all, password change, and password reset revoke refresh sessions.
 
-## Authorization and data protection
+## Limits and network controls
 
-- Protected API routes ignore soft-deleted users.
-- Admin checks are server-side through `requireAdmin`.
-- Account deletion removes owned documents and uploads, then scrubs and soft-deletes the user.
-- Personal data export returns the user profile, owned documents, and owned uploads.
-- Audit events cover authentication, sessions, password actions, profile changes, export, and account deletion. Audit recording never blocks a request.
+- API: 300 requests per 15 minutes.
+- Login and registration: 15 requests per 15 minutes.
+- Password reset: 5 requests per hour.
+- Sensitive operations: 20 requests per 15 minutes.
+- CORS allows configured `CLIENT_URL` origins and localhost outside production. Vercel preview origins require explicit opt-in.
+- Helmet sets CSP, HSTS, frame denial, and `nosniff`. JSON bodies are limited to 1 MB.
+- Uploads require matching PDF, DOCX, or TXT extension and MIME type. Filenames are UUIDs and the default size limit is 5 MB. Public upload serving is disabled.
 
-## Network and uploads
+## Audit and personal data
 
-- Helmet applies CSP, HSTS, frame denial, and MIME sniffing protection.
-- JSON request bodies are limited to 1 MB.
-- CORS accepts configured client origins and localhost only outside production. Vercel previews require explicit opt-in.
-- Uploads accept only PDF, DOCX, and TXT files when both extension and MIME type match.
-- Uploaded files use random UUID filenames and default to a 5 MB limit. Public upload serving is disabled by default.
-- API, authentication, password-reset, and sensitive-operation rate limits are enabled.
+- Audit records cover login success/failure/lock, registration, logout, refresh, password actions, profile updates, data export, and account deletion. Audit recording does not throw into request handling.
+- `GET /api/auth/export-data` returns the authenticated user's profile, owned documents, and uploads.
+- `DELETE /api/auth/delete-account` verifies the password, deletes owned documents and uploads, then soft-deletes and scrubs the user record.
+- Soft-deleted users cannot authenticate. Admin authorization is checked on the server with `requireAdmin`.
 
-## Deployment notes
+## WebSocket checks
 
-Set strong, unique JWT secrets and configure `CLIENT_URL` on Render. Set `COOKIE_SAME_SITE=none` and `COOKIE_SECURE=true` when the Vercel client and Render API are on different HTTPS origins. Configure the `SMTP_*` variables to send reset email through SMTP; without them, reset messages are logged for local development only.
+Collaboration connections must provide a valid access token. The server validates the document ID, resolves the user from the token, and checks that the user is the document owner or a collaborator before joining the Yjs room. Viewer/editor permissions are checked by document API handlers; invalid or unauthorized sockets are closed.
